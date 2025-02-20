@@ -68,8 +68,39 @@ ENTRYPOINT ["/rails/bin/docker-entrypoint"]
 EXPOSE 3000
 CMD ["./bin/rails", "server"]
 
-# Install MySQL client libraries
+# Use the appropriate base image
+FROM ruby:3.1
+
+# Set environment variables to prevent Gemfile.lock issues
+ENV BUNDLER_VERSION=2.3.26
+ENV RAILS_ENV=production
+ENV RACK_ENV=production
+
+# Install system dependencies for MySQL 2 gem
 RUN apt-get update -qq && apt-get install -y \
-    default-libmysqlclient-dev \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+  libmysqlclient-dev \
+  build-essential \
+  libssl-dev \
+  libreadline-dev \
+  zlib1g-dev
+
+# Set the working directory in the container
+WORKDIR /app
+
+# Copy Gemfile and Gemfile.lock
+COPY Gemfile Gemfile.lock ./
+
+# Install the Ruby dependencies
+RUN bundle install
+
+# Remove unnecessary files to reduce the image size
+RUN rm -rf ~/.bundle/ "${BUNDLE_PATH}"/ruby/*/cache "${BUNDLE_PATH}"/ruby/*/bundler/gems/*/.git
+
+# Precompile assets if needed
+RUN bundle exec bootsnap precompile --gemfile
+
+# Copy the rest of the application files
+COPY . .
+
+# Set the entrypoint for the app
+CMD ["rails", "s"]
